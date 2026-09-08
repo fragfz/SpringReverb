@@ -20,10 +20,13 @@ sample_rate_hz = ma.SR;  // For plugins
 dwell = hslider ("Dwell[style:knob][stratus:0]", 5, 0, 10, 0.1);
 feedback_gain_linear = dwell * (-0.0006 * dwell + 0.013) + 0.26;
 
-// "Blend"
-// Keeping it linear to save CPU
-blend = hslider ("Blend[style:knob][stratus:1]", 5, 0, 10, 0.1);
-wet_gain_linear = blend * 0.08;
+
+// "Dry Level" and "Wet Level"
+// Separate controls for series/parallel flexibility. Can be used as insert (both at 0dB)
+// or as parallel send (dry muted, wet adjustable). dB scale for intuitive control.
+dry_level = hslider ("Dry Level[style:knob][unit:dB]", 0, -60, 0, 0.1) : ba.db2linear;
+wet_level = hslider ("Wet Level[style:knob][unit:dB]", -6, -60, 0, 0.1) : ba.db2linear;
+
 
 // "Tone"
 // Affects only wet signal, aplies some makeup gain to compensate for lost HF energy
@@ -111,4 +114,7 @@ feedback_lines = ro.hadamard (N) : par (i, N, * (feedback_gain_linear));
 
 // Diffuse -> Delay lines with feebback loop
 reverb = _ * (0.01) <: diffusion: (si.bus (N * 2) :> delay_lines) ~ (feedback_lines) :> fi.highpass (1, 150) : * (makeup_gain) : _;
-process = _ <: (_, wet_gain_linear * reverb) :> _ ;
+// in --+------ dry -------> * dry_level --+--> out
+//      |                                    |
+//      +---> reverb ---> * wet_level -----+
+process = _ <: (*(dry_level), reverb * wet_level) :> _;
