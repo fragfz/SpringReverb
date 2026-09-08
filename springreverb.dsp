@@ -33,6 +33,25 @@ feedback_gain_linear = dwell * (-0.0006 * dwell + 0.013) + 0.26;
 dry_level = hslider ("Dry Level[style:knob][unit:dB]", 0, -60, 0, 0.1) : ba.db2linear;
 wet_level = hslider ("Wet Level[style:knob][unit:dB]", -6, -60, 0, 0.1) : ba.db2linear;
 
+// "Duck"
+// Envelope follower on dry signal, applies gain reduction to wet reverb.
+// At 0%: ratio=1.0, no reduction (pure bypass). Keeps reverb tail audible 
+// during gaps, prevents source burial. After Klaus Scheuermann.
+duck_amount = hslider ("Duck[style:knob][unit:%]", 0, 0, 100, 1) / 100;
+
+duckThreshAt0 = -12;    duckThreshAt100 = -40;
+duckRatioAt0  = 1.0;    duckRatioAt100  = 8.0;
+duckRangeAt0  = 0;      duckRangeAt100  = 18;
+duckAttAt0    = 0.005;  duckAttAt100    = 0.002;
+duckRelAt0    = 0.300;  duckRelAt100    = 0.150;
+
+lerp(a, b, t) = a + (b - a) * t;
+
+duck_thresh = lerp(duckThreshAt0, duckThreshAt100, duck_amount);
+duck_ratio  = lerp(duckRatioAt0,  duckRatioAt100,  duck_amount);
+duck_range  = lerp(duckRangeAt0,  duckRangeAt100,  duck_amount);
+duck_att    = lerp(duckAttAt0,    duckAttAt100,    duck_amount);
+duck_rel    = lerp(duckRelAt0,    duckRelAt100,    duck_amount);
 
 // "Tone"
 // Affects only wet signal, aplies some makeup gain to compensate for lost HF energy
@@ -118,12 +137,23 @@ delay_lines = par (i, N, spring (spring_delay_samples (i), lowpass_freq_hz) : aa
 // having N individual feedback loops, we have one multi-channel loop.
 feedback_lines = ro.hadamard (N) : par (i, N, * (feedback_gain_linear));
 
-// Diffuse -> Delay lines with feebback loop
-// Predelay Sits after all spring processing
+// Ducker: reduction gain from key signal
+duckapply(wet, key) = wet * g
+with {
+    envDb = an.amp_follower_ar(duck_att, duck_rel, key)
+          : max(ba.db2linear(-120)) : ba.linear2db;
+    redDb = min(max(0, envDb - duck_thresh) * (1 - 1 / duck_ratio), duck_range);
+    g     = ba.db2linear(0 - redDb);
+};
+
+// Diffuse -> Delay lines with feebback loop -> Predelay
 reverb = _ * (0.01) <: diffusion: (si.bus (N * 2) :> delay_lines) ~ (feedback_lines) :> fi.highpass (1, 150) : * (makeup_gain) : predelay : _;
 
 // in --+------ dry -------> * dry_level --+--> out
 //      |                                    |
-//      +---> reverb ---> * wet_level -----+
-// process with dry/wet split (predelay applied only to wet)
-process = _ <: (*(dry_level), reverb * wet_level) :> _;
+//      +---> reverb ---> duckapply ---> * wet_level -----+
+// Key tapped from dry input (pre-reverb), reduction applied to wet after predelay
+process = _ <: (
+    *(dry_level),
+    reverb : duckapply(_, _) * wet_level
+) :> _;
