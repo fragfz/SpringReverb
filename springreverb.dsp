@@ -155,5 +155,5 @@ reverb = _ * (0.01) <: diffusion: (si.bus (N * 2) :> delay_lines) ~ (feedback_li
 // Key tapped from dry input (pre-reverb), reduction applied to wet after predelay
 process = _ <: (
     *(dry_level),
-    reverb : duckapply(_, _) * wet_level
+    duckapply(reverb, _) * wet_level
 ) :> _;
