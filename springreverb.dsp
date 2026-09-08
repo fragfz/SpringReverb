@@ -11,8 +11,8 @@ declare stratusVersion "1.0.33";
 declare filename "springreverb.dsp";
 declare name "Spring Reverb";
 
-sample_rate_hz = 44100;  // For Stratus
-// sample_rate_hz = ma.SR;  // For plugins 
+// sample_rate_hz = 44100;  // For Stratus
+sample_rate_hz = ma.SR;  // For plugins 
 
 // "Dwell"
 // Sweep: ({0.0, 0.26}, {5.0, 0.31}, {10.0, 0.33})
