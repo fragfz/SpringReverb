@@ -14,6 +14,12 @@ declare name "Spring Reverb";
 // sample_rate_hz = 44100;  // For Stratus
 sample_rate_hz = ma.SR;  // For plugins 
 
+// Predelay - adds space before reverb kicks in
+// Range: 0-500ms, default: 0ms (no predelay)
+// after Klaus Scheuermann 
+predelay_time = hslider ("Predelay[style:knob][unit:ms]", 0, 0, 500, 1) * ma.SR / 1000;
+predelay = de.delay (192000, predelay_time);
+
 // "Dwell"
 // Sweep: ({0.0, 0.26}, {5.0, 0.31}, {10.0, 0.33})
 // https://www.wolframalpha.com/input?i=quadratic+fit+calculator&assumption=%7B%22F%22%2C+%22QuadraticFitCalculator%22%2C+%22data%22%7D+-%3E%22%28%7B0.0%2C+0.26%7D%2C+%7B5.0%2C+0.31%7D%2C+%7B10.0%2C+0.33%7D%29%22
@@ -113,8 +119,11 @@ delay_lines = par (i, N, spring (spring_delay_samples (i), lowpass_freq_hz) : aa
 feedback_lines = ro.hadamard (N) : par (i, N, * (feedback_gain_linear));
 
 // Diffuse -> Delay lines with feebback loop
-reverb = _ * (0.01) <: diffusion: (si.bus (N * 2) :> delay_lines) ~ (feedback_lines) :> fi.highpass (1, 150) : * (makeup_gain) : _;
+// Predelay Sits after all spring processing
+reverb = _ * (0.01) <: diffusion: (si.bus (N * 2) :> delay_lines) ~ (feedback_lines) :> fi.highpass (1, 150) : * (makeup_gain) : predelay : _;
+
 // in --+------ dry -------> * dry_level --+--> out
 //      |                                    |
 //      +---> reverb ---> * wet_level -----+
+// process with dry/wet split (predelay applied only to wet)
 process = _ <: (*(dry_level), reverb * wet_level) :> _;
